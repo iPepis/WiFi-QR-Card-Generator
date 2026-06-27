@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi QR Card Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:         #EDF0F5;
+            --surface:    #FFFFFF;
+            --card-top:   #1E293B;
+            --text-1:     #0F172A;
+            --text-2:     #475569;
+            --text-3:     #94A3B8;
+            --border:     #E2E8F0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            min-height: 100vh;
+            padding: 48px 20px 64px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* ── Page Label ── */
+        .page-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin-bottom: 28px;
+        }
+
+        /* ── Form Card ── */
+        .form-card {
+            width: 100%;
+            max-width: 390px;
+            background: var(--surface);
+            border-radius: 18px;
+            padding: 26px 24px 22px;
+            box-shadow: 0 2px 18px rgba(15,23,42,0.07);
+            margin-bottom: 30px;
+        }
+
+        .field { margin-bottom: 14px; }
+        .field:last-of-type { margin-bottom: 20px; }
+
+        .field label {
+            display: block;
+            font-size: 0.67rem;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin-bottom: 6px;
+        }
+
+        .field input,
+        .field select {
+            width: 100%;
+            padding: 10px 13px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 0.93rem;
+            color: var(--text-1);
+            background: #FAFBFC;
+            outline: none;
+            transition: border-color 0.18s, background 0.18s;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .field input:focus,
+        .field select:focus {
+            border-color: #64748B;
+            background: white;
+        }
+
+        .field input::placeholder { color: var(--text-3); }
+
+        .btn-generate {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: var(--card-top);
+            color: white;
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background 0.18s, transform 0.1s;
+        }
+
+        .btn-generate:hover  { background: #0F172A; }
+        .btn-generate:active { transform: scale(0.99); }
+
+        /* ── WiFi Card Output ── */
+        #card-output {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        #card-output.visible { display: flex; }
+
+        .wifi-card {
+            width: 280px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(15,23,42,0.13);
+            overflow: hidden;
+        }
+
+        /* Top bar */
+        .card-header {
+            background: var(--card-top);
+            padding: 18px 20px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .wifi-icon-svg { width: 24px; height: 24px; flex-shrink: 0; }
+
+        .card-label {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: 8px;
+            color: white;
+            text-transform: uppercase;
+            padding-left: 8px; /* optical balance for tracking */
+        }
+
+        /* QR section */
+        .card-qr {
+            padding: 22px 22px 14px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .card-qr > div { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+        .scan-hint {
+            font-size: 0.62rem;
+            font-weight: 600;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            color: var(--text-3);
+        }
+
+        #qrcode canvas,
+        #qrcode img { display: block; border-radius: 6px; }
+
+        /* Credentials */
+        .card-creds {
+            border-top: 1px solid var(--border);
+            padding: 13px 20px 17px;
+        }
+
+        .cred-row { display: flex; gap: 10px; align-items: baseline; }
+        .cred-row + .cred-row { margin-top: 7px; }
+
+        .cred-key {
+            font-size: 0.62rem;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            color: var(--text-3);
+            min-width: 58px;
+            flex-shrink: 0;
+            padding-top: 1px;
+        }
+
+        .cred-val {
+            font-size: 0.87rem;
+            font-weight: 600;
+            color: var(--text-1);
+            word-break: break-all;
+            line-height: 1.35;
+        }
+
+        /* ── Action Buttons Row ── */
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn-action {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            padding: 9px 18px;
+            border: 1.5px solid var(--border);
+            border-radius: 9px;
+            background: white;
+            font-family: inherit;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            color: var(--text-2);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .btn-action:hover:not(:disabled) {
+            background: #F8FAFC;
+            border-color: #94A3B8;
+        }
+
+        .btn-action:disabled {
+            opacity: 0.55;
+            cursor: default;
+        }
+
+        /* Chevron inside download button */
+        .btn-action .chev {
+            opacity: 0.5;
+            transition: transform 0.18s;
+        }
+
+        .btn-action.open .chev { transform: rotate(180deg); }
+
+        /* ── Download Dropdown ── */
+        .dl-wrap { position: relative; }
+
+        .dl-menu {
+            display: none;
+            position: absolute;
+            bottom: calc(100% + 7px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            border: 1.5px solid var(--border);
+            border-radius: 11px;
+            box-shadow: 0 6px 24px rgba(15,23,42,0.13);
+            overflow: hidden;
+            min-width: 118px;
+            z-index: 20;
+        }
+
+        .dl-menu.open { display: block; }
+
+        .dl-menu button {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: 9px 15px;
+            border: none;
+            background: none;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-1);
+            cursor: pointer;
+            gap: 9px;
+            text-align: left;
+            transition: background 0.12s;
+        }
+
+        .dl-menu button:hover { background: #F8FAFC; }
+        .dl-menu button + button { border-top: 1px solid var(--border); }
+
+        .fmt-badge {
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            color: var(--text-3);
+            background: var(--bg);
+            border-radius: 4px;
+            padding: 2px 5px;
+            text-transform: uppercase;
+        }
+
+        /* ── Print Styles ── */
+        @media print {
+            body {
+                background: white;
+                padding: 20px;
+                display: block;
+            }
+
+            .page-label,
+            .form-card,
+            .btn-row { display: none !important; }
+
+            #card-output {
+                display: flex !important;
+                align-items: center;
+            }
+
+            .wifi-card {
+                box-shadow: none;
+                border: 1px solid #CBD5E1;
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <p class="page-label">WiFi QR Card Generator</p>
+
+    <!-- Form -->
+    <div class="form-card">
+        <div class="field">
+            <label>Network Name (SSID)</label>
+            <input type="text" id="ssid" placeholder="e.g. ApartmentName_5G"
+                   autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+            <label>Password</label>
+            <input type="text" id="password" placeholder="e.g. Welcome2025!"
+                   spellcheck="false">
+        </div>
+        <div class="field">
+            <label>Security Type</label>
+            <select id="security">
+                <option value="WPA">WPA / WPA2 (most common)</option>
+                <option value="WEP">WEP</option>
+                <option value="nopass">None (open network)</option>
+            </select>
+        </div>
+        <button class="btn-generate" onclick="generate()">Generate Card</button>
+    </div>
+
+    <!-- WiFi Card -->
+    <div id="card-output">
+        <div class="wifi-card">
+
+            <!-- Header bar -->
+            <div class="card-header">
+                <svg class="wifi-icon-svg" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M1.42 9a16 16 0 0 1 21.16 0"     stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+                    <path d="M5 12.55a11 11 0 0 1 14 0"        stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.55"/>
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"     stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+                    <circle cx="12" cy="20" r="1.5" fill="white"/>
+                </svg>
+                <span class="card-label">WIFI</span>
+            </div>
+
+            <!-- QR Code -->
+            <div class="card-qr">
+                <div>
+                    <p class="scan-hint">Scan to connect</p>
+                    <div id="qrcode"></div>
+                </div>
+            </div>
+
+            <!-- Credentials -->
+            <div class="card-creds">
+                <div class="cred-row">
+                    <span class="cred-key">Network</span>
+                    <span class="cred-val" id="disp-ssid">—</span>
+                </div>
+                <div class="cred-row">
+                    <span class="cred-key">Password</span>
+                    <span class="cred-val" id="disp-pass">—</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Buttons row -->
+        <div class="btn-row">
+
+            <!-- Print -->
+            <button class="btn-action" onclick="window.print()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2.5"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Print
+            </button>
+
+            <!-- Download dropdown -->
+            <div class="dl-wrap">
+                <button class="btn-action" id="dlBtn" onclick="toggleDl(event)">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.5"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download
+                    <svg class="chev" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.5"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="18 15 12 9 6 15"></polyline>
+                    </svg>
+                </button>
+
+                <div class="dl-menu" id="dlMenu">
+                    <button onclick="downloadCard('png')">
+                        <span class="fmt-badge">PNG</span> Image
+                    </button>
+                    <button onclick="downloadCard('jpg')">
+                        <span class="fmt-badge">JPG</span> Image
+                    </button>
+                    <button onclick="downloadCard('pdf')">
+                        <span class="fmt-badge">PDF</span> Document
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Escape special WiFi QR characters
+        function esc(s) {
+            return s.replace(/\\/g, '\\\\')
+                    .replace(/;/g,  '\\;')
+                    .replace(/,/g,  '\\,')
+                    .replace(/"/g,  '\\"')
+                    .replace(/:/g,  '\\:');
+        }
+
+        function generate() {
+            const ssid = document.getElementById('ssid').value.trim();
+            const pass = document.getElementById('password').value.trim();
+            const sec  = document.getElementById('security').value;
+
+            if (!ssid) {
+                alert('Please enter your network name (SSID).');
+                return;
+            }
+
+            const wifiStr = sec === 'nopass'
+                ? `WIFI:T:nopass;S:${esc(ssid)};;`
+                : `WIFI:T:${sec};S:${esc(ssid)};P:${esc(pass)};;`;
+
+            // Clear & re-render QR
+            const box = document.getElementById('qrcode');
+            box.innerHTML = '';
+            new QRCode(box, {
+                text:           wifiStr,
+                width:          210,
+                height:         210,
+                colorDark:      '#0F172A',
+                colorLight:     '#FFFFFF',
+                correctLevel:   QRCode.CorrectLevel.M
+            });
+
+            document.getElementById('disp-ssid').textContent = ssid;
+            document.getElementById('disp-pass').textContent = sec === 'nopass' ? 'No password' : pass;
+
+            const out = document.getElementById('card-output');
+            out.classList.add('visible');
+            out.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Allow Enter key to trigger generation
+        document.addEventListener('keydown', e => { if (e.key === 'Enter') generate(); });
+
+        /* ── Download dropdown ── */
+        function toggleDl(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('dlMenu');
+            const btn  = document.getElementById('dlBtn');
+            const open = menu.classList.toggle('open');
+            btn.classList.toggle('open', open);
+        }
+
+        document.addEventListener('click', () => {
+            document.getElementById('dlMenu').classList.remove('open');
+            document.getElementById('dlBtn').classList.remove('open');
+        });
+
+        /* ── Download card as PNG / JPG / PDF ── */
+        async function downloadCard(fmt) {
+            document.getElementById('dlMenu').classList.remove('open');
+            document.getElementById('dlBtn').classList.remove('open');
+
+            const btn = document.getElementById('dlBtn');
+            const origHTML = btn.innerHTML;
+            btn.innerHTML = '<span style="opacity:.6;font-size:.78rem">Generating…</span>';
+            btn.disabled = true;
+
+            try {
+                const card = document.querySelector('.wifi-card');
+
+                const canvas = await html2canvas(card, {
+                    scale:           3,
+                    useCORS:         true,
+                    backgroundColor: '#ffffff',
+                    logging:         false
+                });
+
+                const ssid     = document.getElementById('disp-ssid').textContent.replace(/\s+/g, '-') || 'wifi-card';
+                const filename = `wifi-card-${ssid}`;
+
+                if (fmt === 'pdf') {
+                    const { jsPDF } = window.jspdf;
+                    const toMm  = px => px * 25.4 / 96;
+                    const wMm   = toMm(card.offsetWidth);
+                    const hMm   = toMm(card.offsetHeight);
+                    const pad   = 6; // mm padding around card
+                    const pdf   = new jsPDF({
+                        orientation: 'portrait',
+                        unit:        'mm',
+                        format:      [wMm + pad * 2, hMm + pad * 2]
+                    });
+                    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pad, pad, wMm, hMm);
+                    pdf.save(`${filename}.pdf`);
+                } else {
+                    const mime = fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+                    const link = document.createElement('a');
+                    link.download = `${filename}.${fmt}`;
+                    link.href     = canvas.toDataURL(mime, 0.96);
+                    link.click();
+                }
+            } catch (err) {
+                console.error('Download failed:', err);
+                alert('Download failed — please try again.');
+            } finally {
+                btn.innerHTML = origHTML;
+                btn.disabled  = false;
+            }
+        }
+    </script>
+
+</body>
+</html>

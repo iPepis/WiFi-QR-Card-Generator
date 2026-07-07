@@ -69,7 +69,7 @@
 
 No installation, no dependencies, no build step.
 
-1. **Download** `wifi-qr-generator.html`
+1. **Download** `index.html`
 2. **Open** it in any modern browser (Chrome, Firefox, Safari, Edge)
 3. **Fill in** your network name (SSID), password, and security type
 4. **Click** Generate Card
